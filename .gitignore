@@ -44,3 +44,4 @@ MANIFEST
 
 # --- Projects ---
 target/
+visualize_graph.py

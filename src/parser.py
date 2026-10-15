@@ -1,8 +1,10 @@
 import json
-from src.rules import get_skill, get_risk, get_effort, get_deadline, make_title
+from datetime import datetime
+from rules import get_skill, get_risk, get_effort, make_title
+from mock_generator import assign_sprint_timeline_and_sla
 
 
-def build_vulnerabilities(raw_path: str) -> list:
+def build_vulnerabilities(raw_path: str, num_sprints: int = 8) -> list:
     # doc du lieu tho
     items = []
     with open(raw_path, "r", encoding="utf-8") as f:
@@ -21,13 +23,20 @@ def build_vulnerabilities(raw_path: str) -> list:
         parts = f_path.split("/")
         asset = parts[0] if len(parts) > 1 else "ts-root-service"
 
+        # parse author_date thanh commit_timestamp
+        d_str = item.get("author_date")
+        try:
+            commit_ts = datetime.fromisoformat(d_str).timestamp() if d_str else 0.0
+        except Exception:
+            commit_ts = 0.0
+
         cwes = item.get("cwe", [])
         primary_cwe = cwes[0] if cwes else "CWE-Other"
         skill = get_skill(cwes)
         r_i = get_risk(item.get("severity", "MEDIUM"), f_path)
-        e_i = get_effort(item.get("s_line"), item.get("e_line"))
-        t_i = round(e_i * 4.0, 1)
         title = make_title(item.get("rule_id", ""))
+        e_i = get_effort(cwe=primary_cwe, title=title, file_path=f_path, s_line=item.get("s_line"), e_line=item.get("e_line"))
+        t_i = round(e_i * 4.0, 1)
 
         if asset == "ts-auth-service" and auth_vuln_id is None:
             auth_vuln_id = raw_id
@@ -40,49 +49,59 @@ def build_vulnerabilities(raw_path: str) -> list:
             "asset_module": asset,
             "r_i": r_i,
             "e_i": e_i,
+            "effort_points": e_i,
             "t_i": t_i,
             "skill": skill,
+            "commit_timestamp": commit_ts,
+            "sprint_discovered": 1,
             "earliest_sprint": 1,
-            "deadline_sprint": get_deadline(r_i),
+            "deadline_sprint": 1,
             "predecessors": [],
             "fixing_info": {
                 "commit_id": item.get("commit_id"),
+                "parent_commit": item.get("parent_commit"),
                 "file_path": f_path,
+                "s_line": item.get("s_line"),
+                "e_line": item.get("e_line"),
                 "lines_range": f"{item.get('s_line')}-{item.get('e_line')}"
+            },
+            "consensus_audit": {
+                "label": item.get("label"),
+                "tier": item.get("tier"),
+                "n_tools_ran": item.get("n_tools_ran"),
+                "n_tools_agree": item.get("n_tools_agree"),
+                "agreeing_tools": item.get("agreeing_tools", []),
+                "finding_in_diff": item.get("finding_in_diff"),
+                "confidence": item.get("confidence")
+            },
+            "diff_context": {
+                "diff_parsed": item.get("diff_parsed", {}),
+                "lines_added": item.get("lines_added"),
+                "lines_deleted": item.get("lines_deleted")
             }
         }
         result.append(v)
         by_module.setdefault(asset, []).append(v)
 
-    # quy uoc 1: trong cung microservice, cau hinh (SecurityConfig) phai sua truoc logic (Controller)
-    for mod, v_list in by_module.items():
-        configs = [x for x in v_list if "SecurityConfig" in x["fixing_info"]["file_path"]]
+    # phan nhom theo repository va module: quan he phu thuoc (precedence) chi ap dung noi bo trong cung 1 module/service
+    by_repo_module = {}
+    for v in result:
+        repo = v["repository"]
+        mod = v["asset_module"]
+        by_repo_module.setdefault((repo, mod), []).append(v)
+
+    # quy tac intra-service / intra-module:
+    # trong cung microservice cua 1 repo, loi cau hinh (SecurityConfig, WebSecurityConfig, AuthConfig) phai sua truoc logic (Controller)
+    for (repo, mod), v_list in by_repo_module.items():
+        configs = [x for x in v_list if any(k in x["fixing_info"]["file_path"] for k in ["SecurityConfig", "WebSecurityConfig", "AuthConfig"])]
         controllers = [x for x in v_list if "Controller" in x["fixing_info"]["file_path"]]
         if configs and controllers:
             cfg_id = configs[0]["id"]
             for ctrl in controllers:
-                if cfg_id not in ctrl["predecessors"]:
+                if cfg_id != ctrl["id"] and cfg_id not in ctrl["predecessors"]:
                     ctrl["predecessors"].append(cfg_id)
 
-    # quy uoc 2: service call graph - auth service phai duoc va truoc user service va payment service
-    if auth_vuln_id:
-        target_services = {"ts-user-service", "ts-inside-payment-service"}
-        for v in result:
-            if v["asset_module"] in target_services and v["id"] != auth_vuln_id:
-                if auth_vuln_id not in v["predecessors"]:
-                    v["predecessors"].append(auth_vuln_id)
-
-    # lan truyen nguoc deadline de dam bao b_pred <= b_succ (tranh bay vo nghiem)
-    v_map = {v["id"]: v for v in result}
-    loop = True
-    while loop:
-        loop = False
-        for v in result:
-            b_curr = v["deadline_sprint"]
-            for pid in v["predecessors"]:
-                pred = v_map.get(pid)
-                if pred and pred["deadline_sprint"] > b_curr:
-                    pred["deadline_sprint"] = b_curr
-                    loop = True
+    # Gan sprint timeline va SLA deadline dong bo voi DAG
+    result = assign_sprint_timeline_and_sla(result, num_sprints=num_sprints)
 
     return result
