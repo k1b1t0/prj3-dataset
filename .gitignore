@@ -45,3 +45,4 @@ MANIFEST
 # --- Projects ---
 target/
 visualize_graph.py
+visualize_sprints.py
