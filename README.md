@@ -1,4 +1,4 @@
-# dataset-prj3
+# prj3-dataset
 
 Dataset generation benchmark for Project 3
 
