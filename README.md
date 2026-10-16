@@ -54,14 +54,18 @@ Output files are generated under `target/`.
   "repository": "https://github.com/FudanSELab/train-ticket",
   "asset_module": "ts-admin-basic-info-service",
   "r_i": 6.5,
-  "e_i": 2,
-  "t_i": 8.0,
+  "e_i": 8,
+  "effort_points": 8,
+  "t_i": 32.0,
   "skill": "SKILL_A07",
+  "commit_timestamp": 1607354700.0,
+  "sprint_discovered": 1,
   "earliest_sprint": 1,
-  "deadline_sprint": 3,
+  "deadline_sprint": 4,
   "predecessors": [],
   "fixing_info": {
     "commit_id": "1b74b12f5cab26118d47ece3e6766ffcf96fbec9",
+    "parent_commit": "c06cba87caa6dba49a7d7f27738d4561b42660ec",
     "file_path": "ts-admin-basic-info-service/src/main/java/adminbasic/config/SecurityConfig.java",
     "lines_range": "58-60"
   }
@@ -70,19 +74,21 @@ Output files are generated under `target/`.
 
 | Field | Type | Description | Source / Rule |
 |---|---|---|---|
-| `id` | Integer | Unique finding ID. | [Raw Dataset](file:///home/kibito/Desktop/repos/project3/prj3-dataset-crawl/raw/combined_positive_gold_silver.jsonl) (`item["id"]`) |
-| `title` | String | Technical rule identifier (`rule_id`). | [Raw Dataset](file:///home/kibito/Desktop/repos/project3/prj3-dataset-crawl/raw/combined_positive_gold_silver.jsonl) (`item["rule_id"]`), fallback "Security Issue" ([rules.py](file:///home/kibito/Desktop/repos/project3/prj3-dataset-crawl/src/rules.py)) |
+| `id` | Integer | Unique finding ID. | [Raw Dataset](file:///home/kibito/Desktop/repos/project3/dataset/prj3-dataset-crawl/raw/combined_positive_gold_silver.jsonl) (`item["id"]`) |
+| `title` | String | Technical rule identifier (`rule_id`). | [Raw Dataset](file:///home/kibito/Desktop/repos/project3/dataset/prj3-dataset-crawl/raw/combined_positive_gold_silver.jsonl) (`item["rule_id"]`), fallback "Security Issue" ([rules.py](file:///home/kibito/Desktop/repos/project3/dataset/prj3-dataset-crawl/src/rules.py)) |
 | `cwe` | String | Common Weakness Enumeration ID. | [MITRE CWE List](https://cwe.mitre.org/data/definitions/1344.html) (`item["cwe"][0]`) |
-| `repository` | String | Source code repository URL. | [Raw Dataset](file:///home/kibito/Desktop/repos/project3/prj3-dataset-crawl/raw/combined_positive_gold_silver.jsonl) (`item["repo"]`) |
-| `asset_module` | String | Target module / microservice name. | Extracted from root folder of `item["file_path"]` ([parser.py](file:///home/kibito/Desktop/repos/project3/prj3-dataset-crawl/src/parser.py)) |
+| `repository` | String | Source code repository URL. | [Raw Dataset](file:///home/kibito/Desktop/repos/project3/dataset/prj3-dataset-crawl/raw/combined_positive_gold_silver.jsonl) (`item["repo"]`) |
+| `asset_module` | String | Target module / microservice name. | Extracted from root folder of `item["file_path"]` ([parser.py](file:///home/kibito/Desktop/repos/project3/dataset/prj3-dataset-crawl/src/parser.py)) |
 | `r_i` | Float | Risk score $[1.0, 10.0]$. | Mapped from [FIRST CVSS v3.1 Qualitative Scale](https://www.first.org/cvss/v3.1/specification-document#5-Qualitative-Severity-Rating-Scale) ([Sec 4.2](#42-risk-score-r_i)). |
-| `e_i` | Integer | Estimated effort in Story Points. | Line span rule ($e\_line - s\_line + 1$) ([Sec 4.3](#43-effort-e_i-and-duration-t_i)). |
-| `t_i` | Float | Estimated duration in hours ($t_i = e_i \times 4.0$). | Agile standard: $t_i = e_i \times 4.0\text{h}$ (1 SP = 4 hours). |
+| `e_i` | Integer | Estimated effort in Fibonacci Story Points $\{1, 2, 3, 5, 8\}$. | Linear-Log Multi-factor Model (SQALE IEEE 2012 / VULCON ACM TOPS 2018 / COCOMO II) ([Sec 4.3](#43-effort-e_i-and-duration-t_i)). |
+| `t_i` | Float | Estimated duration in ideal hours ($t_i = e_i \times 4.0\text{h}$). | Agile Scrum standard: 1 SP = 4 ideal development hours. |
 | `skill` | String | OWASP Top 10 remediation skill (`SKILL_A01` - `SKILL_A10`). | Mapped via [OWASP Top 10 (2021)](https://owasp.org/Top10/A00_2021_Introduction/) & [MITRE CWE-1344](https://cwe.mitre.org/data/definitions/1344.html) ([Sec 4.1](#41-owasp-skill-mapping-cwe---skill)). |
-| `earliest_sprint` | Integer | Earliest sprint allowed to start ($a_i = 1$). | Initialized to 1 (all tasks ready unless constrained by predecessors). |
-| `deadline_sprint` | Integer | Latest sprint required to complete ($b_i$). | Inverse to $r_i$ + backward DAG propagation ($b_{pred} \le b_{succ}$) ([Sec 4.4](#44-deadline-b_i--backward-propagation)). |
+| `commit_timestamp`| Float | Unix timestamp of git commit. | Parsed from ISO `author_date` string in Git history. |
+| `sprint_discovered` | Integer | Sprint index where issue was discovered ($1 \le s_{\text{disc}} \le K$). | Quantile Binning based on Git commit timeline ([Sec 4.4](#44-dynamic-sprints-k-discovery-timeline--sla-deadline)). |
+| `earliest_sprint` | Integer | Earliest sprint allowed to start ($a_i = s_{\text{disc}}$). | Synced with sprint discovery and DAG dependencies. |
+| `deadline_sprint` | Integer | Latest sprint required to complete ($b_i$). | PCI-DSS / CISA BOD SLA deadline + Backward DAG Monotonicity ($b_u \le b_v$) ([Sec 4.4](#44-dynamic-sprints-k-discovery-timeline--sla-deadline)). |
 | `predecessors` | Array[Integer] | Prerequisite task IDs (must finish before $v_i$). | Intra-service precedence: security config before controller logic ([Sec 4.5](#45-precedence-generation-intra-service-architecture-rule)). |
-| `fixing_info` | Object | Commit hash, file path, line range. | [Raw Dataset](file:///home/kibito/Desktop/repos/project3/prj3-dataset-crawl/raw/combined_positive_gold_silver.jsonl) (`commit_id`, `parent_commit`, `file_path`, `s_line`, `e_line`). |
+| `fixing_info` | Object | Commit hash, file path, line range. | [Raw Dataset](file:///home/kibito/Desktop/repos/project3/dataset/prj3-dataset-crawl/raw/combined_positive_gold_silver.jsonl) (`commit_id`, `parent_commit`, `file_path`, `s_line`, `e_line`). |
 
 ### 3.2. Teams ($t \in T$) — `target/teams.jsonl`
 
@@ -152,26 +158,47 @@ Directly mapped from the [FIRST CVSS v3.1 Qualitative Severity Rating Scale](htt
 
 ### 4.3. Effort ($e_i$) and Duration ($t_i$)
 
-Calculated from vulnerability line span (`e_line - s_line + 1`):
+Remediation effort is estimated using the **Multi-factor Linear-Log with Offset Model** grounded in SQALE (IEEE 2012), VULCON (ACM TOPS 2018), and COCOMO II:
 
-| Line Span | Effort ($e_i$) | Duration ($t_i = e_i \times 4.0\text{h}$) |
-|---|---|---|
-| $\le 3$ lines | 2 SP | 8.0 hours |
-| $4 - 15$ lines | 3 SP | 12.0 hours |
-| $> 15$ lines | 5 SP | 20.0 hours |
+$$H_i = \left[ H_{\text{base}}(\text{cwe}_i, \text{title}_i) + 0.5 \cdot \ln(1 + \text{span}_i) \right] \times M_{\text{arch}}(\text{file\_path}_i)$$
 
-### 4.4. Deadline ($b_i$) & Backward Propagation
+1. **Base Effort ($H_{\text{base}}$)**:
+   - *Tier 1: Trivial / Literal / Config* ($1.0\text{h}$): `CWE-798`, `CWE-259`, `CWE-330`, `CWE-532`, logger leak, weak cipher/hash.
+   - *Tier 2: Medium / Sanitization* ($2.5\text{h}$ - Default): `CWE-89`, `CWE-79`, `CWE-22`, `CWE-611`, `CWE-78` (SQLi, XSS, Path Traversal).
+   - *Tier 3: Major / Build Upgrade* ($4.5\text{h}$): `CWE-937`, `pom.xml`, `build.gradle`, dependency version conflicts.
+   - *Tier 4: High / Architecture Control* ($7.0\text{h}$): `CWE-352`, `CWE-284`, `CWE-287`, `CWE-862` (CSRF, AuthN/AuthZ, JWT).
 
-Initial mapping inversely proportional to risk score $r_i$:
+2. **Architectural Multiplier ($M_{\text{arch}}$)**:
+   - *Isolated / Leaf* ($1.0\times$): `*DTO.java`, `*Entity.java`, `*Model.java`, `*Util.java`.
+   - *Business / Endpoint* ($1.3\times$): `*Controller.java`, `*Service.java`, `*Repository.java`.
+   - *Core Config / Cross-Cutting* ($1.6\times$): `*Config.java`, `*Security.java`, `*Filter.java`, `pom.xml`.
 
-| Risk Score ($r_i$) | Preliminary Deadline ($b_i$) |
-|---|---|
-| $r_i \ge 8.5$ | Sprint 1 |
-| $7.0 \le r_i < 8.5$ | Sprint 2 |
-| $4.0 \le r_i < 7.0$ | Sprint 3 |
-| $r_i < 4.0$ | Sprint 4 |
+3. **Fibonacci Story Point Quantization ($e_i \in \{1, 2, 3, 5, 8\}$)**:
+   - $H_i \le 2.0\text{h} \implies 1\text{ SP}$
+   - $2.0\text{h} < H_i \le 4.0\text{h} \implies 2\text{ SP}$
+   - $4.0\text{h} < H_i \le 7.0\text{h} \implies 3\text{ SP}$
+   - $7.0\text{h} < H_i \le 11.0\text{h} \implies 5\text{ SP}$
+   - $H_i > 11.0\text{h} \implies 8\text{ SP}$
+   - Duration in ideal hours: $t_i = e_i \times 4.0\text{h}$.
 
-**Backward DAG Sync:** For each dependency edge $u \in predecessors(v)$, enforce $b_u \leftarrow \min(b_u, b_v)$ to guarantee feasible scheduling.
+### 4.4. Dynamic Sprints ($K$), Discovery Timeline & SLA Deadline
+
+1. **Dynamic Sprint Count ($K$)**:
+   - Total backlog effort: $E_{\text{total}} = \sum e_i = 6,752\text{ SP}$.
+   - System sprint capacity: $C_{\text{total}} = \sum \text{cap}_t \approx 80\text{ SP/sprint}$.
+   - Optimal release horizon: $K = 8\text{ Sprints}$.
+
+2. **Quantile Binning Timeline ($s_{\text{disc}}$)**:
+   - Sorted by Git commit timestamp `commit_timestamp` into $K=8$ equal quantiles: $1 \le s_{\text{disc}} \le 8$.
+   - Forward DAG Sync: If $u \in \text{predecessors}(v)$, then $s_{\text{disc}}(u) \le s_{\text{disc}}(v)$.
+
+3. **International SLA Deadline ($b_i$)**:
+   - Aligned with PCI-DSS Req 6.2 and CISA BOD 22-01:
+     - Critical ($r_i \ge 9.0$): $b_i = s_{\text{disc}} + 1$
+     - High ($7.0 \le r_i < 9.0$): $b_i = s_{\text{disc}} + 2$
+     - Medium ($4.0 \le r_i < 7.0$): $b_i = s_{\text{disc}} + 3$
+     - Low ($r_i < 4.0$): $b_i = \min(s_{\text{disc}} + 4, K)$
+   - **Backward DAG Monotonicity**: For each dependency edge $u \in \text{predecessors}(v)$, enforce $b_u \leftarrow \min(b_u, b_v)$ ensuring $b_u \le b_v$.
 
 ### 4.5. Precedence Generation (Intra-Service Architecture Rule)
 
